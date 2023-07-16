@@ -1,93 +1,78 @@
-Yet Another GetOpt Library For Go
-=================================
+# getopt library For Go
 
-Originally by Tim Henderson (tim.tadh@gmail.com)
+This is a very simple library for [getopt][]-style argument/option
+parsing, written in and for [Go][]. It supports both traditional "short"
+options (like `-a`, `-b 1`, `-dfe`, etc), and the GNU-style "long"
+options (like `--help`, `--fix=everything`, etc).
 
-BSD Licenced
+[I strongly believe](https://www.rollc.at/posts/2023-07-16-getopt/) that
+exposing a common and familiar user interface in your programs is
+important; the `getopt`-style command line argument parsing is the
+single most universally accepted convention, dating back to at least
+1980, and widely supported by many platforms, languages, and utilities.
 
-Motivation
-----------
+Unfortunately, Go's standard [flag][] module ignores that convention,
+and proposes its own. This package offers a simple alternative.
 
-The existing libraries[1,2,3,4] don't exactly work how I would like them to
-work. Specifically, I want it to work exactly like how the Python `getopt`
-module works. The reason being, that particular implementation has proven
-through years of use to be incredibly scalable and flexible. While, there are
-definitely easier to use approaches (see for instance `argparse`) none have the
-flexibility of the simple `getopt`. 
+[getopt]: https://en.wikipedia.org/wiki/getopt
+[Go]: https://go.dev/
+[flag]: https://pkg.go.dev/flag
 
-The current solutions also try to do too much while not implementing the basic
-functionality in a sensible way. This library will simply pull out a list of the
-flags found, and their options (as strings). Parsing the arguments into Go
-datatypes will be up to the user of the library.
+## Example
 
-### Todo
+You can find more examples in the [examples](/examples) directory of the
+source distribution.
 
-1. Lots more tests (currently it only tests basic functionality, complex
-   situations are probably missed.)
+```go
+package main
 
-### Contributing
+import (
+	"github.com/rollcat/getopt"
+	"os"
+)
 
-1. "Fork"
-2. Make a feature branch.
-3. Do your commits
-4. Send "pull request". This can be
-    1. A github pull request
-    2. A issue with a pointer to your publicly readable git repo
-    3. An email to me with a pointer to your publicly readable git repo
+func main() {
+	args, opts, err := getopt.GetOpt(
+		os.Args[1:],
+		"hv",
+		nil,
+	)
+	if err != nil || len(args) > 0 {
+		println("Usage: program [-hv]")
+		os.Exit(1)
+	}
+	for _, opt := range opts {
+		switch opt.Opt() {
+		case "-v":
+			println("Version 0.1")
+			os.Exit(0)
+		case "-h":
+			println("Usage: program [-hv]")
+			os.Exit(0)
+		default:
+			panic("unexpected argument")
+		}
+	}
+}
+```
 
-Docs
-----
+## Documentation
 
-    PACKAGE
+On [pkg.go.dev](https://pkg.go.dev/github.com/rollcat/getopt).
 
-    package getopt
-        import "github.com/rollcat/getopt"
+You can also use [godocs](http://godocs.io/github.com/rollcat/getopt),
+or the command line:
 
+```shell
+go doc github.com/rollcat/getopt
+```
 
-    FUNCTIONS
+## Author and license
 
-    func GetOpt(
-        args []string,
-        shortopts string,
-        longopts []string,
-    ) (
-        leftovers []string,
-        optargs []OptArg,
-        err error,
-    )
-        GetOpt works like `getopt` in python's `getopt` module in the stdlib
-        (modulus implementation bugs).
+[Original code](https://github.com/timtadh/getopt) by Tim Henderson
+<<tim.tadh@gmail.com>>.
 
-        params
+This fork, and all of its opinionated tweaks, by Kamil Cholewiński
+<<kamil@rollc.at>>.
 
-      args - the argv []string slice
-      shortopts - a string of options (similar to what GNU's getopt excepts).
-                  Options which desire an argument should have a colon, ":",
-                  subsequent to them. There are no optional arguments at this
-                  time.
-                  ex. "hvx:r" would accept -h -v -x asdf -r
-      longopts - a list of strings which describe the long options (eg those with
-                 "--" in front). Placing an = on the end indicates a required
-                 argument.
-                 ex. []string{"help", "example="}
-                   would accept --help --example=tom
-
-
-    TYPES
-
-    type OptArg interface {
-        Opt() string
-        Arg() string
-    }
-        The GetOpt function will return a list of OptArgs. If there is no arg
-        then Arg() will return "". Opt will contain a leading "-" for short and
-        "--" for long args.
-
-
-#### Footnotes
-
-- [1] flag
-- [2] https://github.com/droundy/goopt
-- [3] https://github.com/jteeuwen/go-pkg-optarg
-- [4] https://github.com/kesselborn/go-getopt
-
+License is [BSD](/LICENSE).

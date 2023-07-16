@@ -1,48 +1,85 @@
+// Package getopt implements getopt-style option parsing.
+//
+// Function GetOpt parses a command line argument list, and returns a
+// list of known options, plus the leftover arguments. An option is
+// known if it has been specified either in the string of accepted
+// option characters (shortopts), or in the array of accepted long
+// options (longopts).
+//
+// The shortopts string may contain the following elements: individual
+// characters, and characters followed by a colon ":", to indicate an
+// argument is to follow. For example, an option string "x" recognizes
+// an option "-x", and an option string "x:" recognizes an option and
+// argument "-x argument".
+//
+// The longopts array specifies one option per element. Similarly to
+// how colon works in shortopts, the option may be followed by an
+// equals sign "=", to indicate an expected argument. For example,
+// "flag" recognizes the option "--flag", while "flag:" recognizes an
+// option and an argument "--flag=argument". The longopts array can be
+// empty or nil, to signify that no long options will be processed.
+//
+// The interpretation of options in the argument list may be cancelled
+// by the option "--" (double dash), which causes GetOpt to end
+// further argument processing and return the results so far.
+//
+// The recognized options will be returned in an array of OptArg, in
+// the order in which they were encountered.
+//
+// For example:
+//
+//     args, opts, err := Getopt(
+//         []string{
+//             "-h", "-v", "-x", "asdf", "-r",
+//             "--flag=arg",
+//             "--", "-x", "qwe",
+//         },
+//         "hvx:r",
+//         []string{"help", "flag="},
+//     )
+//
+// Will return the args:
+//
+//    []string{"-x", "qwe"}  // Parsing terminated by "--"
+//
+// And the options:
+//
+//    []OptArg{
+//        OptArg{Option: "-h", Argument: ""},
+//        OptArg{Option: "-v", Argument: ""},
+//        OptArg{Option: "-x", Argument: "asdf"},
+//        OptArg{Option: "-r", Argument: ""},
+//        OptArg{Option: "--flag", Argument: "arg"},
+//    }
+
 package getopt
 
 import "errors"
 import "fmt"
 import "strings"
 
-/*
-The GetOpt function will return a list of OptArgs. If there is no arg then Arg()
-will return "". Opt will contain a leading "-" for short and "--" for long args.
-*/
-type OptArg interface {
-	Opt() string
-	Arg() string
+// OptArg represents a single parsed option (and its argument, if
+// applicable), as parsed by GetOpt.
+type OptArg struct {
+	Option   string
+	Argument string
 }
 
-type optarg struct {
-	opt string
-	arg string
-}
+// Opt returns the Option from OptArg. It exists to maintain backward
+// compatibility with github.com/timtadh/getopt.
+func (o OptArg) Opt() string { return o.Option }
 
-func new_optarg(opt, arg string) *optarg { return &optarg{opt, arg} }
-func (self *optarg) Opt() string         { return self.opt }
-func (self *optarg) Arg() string         { return self.arg }
+// Arg returns the Argument from OptArg. It exists to maintain
+// backward compatibility with github.com/timtadh/getopt.
+func (o OptArg) Arg() string { return o.Argument }
 
-/*
-GetOpt works like `getopt` in python's `getopt` module in the stdlib (modulus
-implementation bugs).
-
-params
-
-	args - the argv []string slice
-	shortopts - a string of options (similar to what GNU's getopt excepts).
-	            Options which desire an argument should have a colon, ":",
-	            subsequent to them. There are no optional arguments at this
-	            time.
-
-	            ex. "hvx:r" would accept -h -v -x asdf -r
-
-	longopts - a list of strings which describe the long options (eg those with
-	           "--" in front). Placing an = on the end indicates a required
-	           argument.
-
-	           ex. []string{"help", "example="}
-	             would accept --help --example=tom
-*/
+// GetOpt parses the provided args, according to shortopts and
+// longopts; and returns the leftover args, parsed options with their
+// arguments, and (if there was one) any encountered parsing error.
+//
+// See the package documentation for a description of the shortops and
+// longopts formats, as well as how the args are interpreted in their
+// context.
 func GetOpt(
 	args []string,
 	shortopts string,
@@ -76,7 +113,7 @@ func GetOpt(
 				msg := fmt.Sprintf("expected an argument for %q got %v", emitopt, arg)
 				return nil, nil, errors.New(msg)
 			}
-			optargs = append(optargs, new_optarg(emitopt, arg))
+			optargs = append(optargs, OptArg{emitopt, arg})
 			skip = false
 			continue
 		}
@@ -93,7 +130,7 @@ func GetOpt(
 						skip = true
 						emitopt = opt
 					} else {
-						optargs = append(optargs, new_optarg(opt, ""))
+						optargs = append(optargs, OptArg{opt, ""})
 					}
 				} else {
 					msg := fmt.Sprintf("couldn't find '%v'", sa)
@@ -104,12 +141,12 @@ func GetOpt(
 			if err != nil {
 				return nil, nil, err
 			} else if oarg != "" {
-				optargs = append(optargs, new_optarg(opt, oarg))
+				optargs = append(optargs, OptArg{opt, oarg})
 			} else if hasarg {
 				skip = true
 				emitopt = opt
 			} else {
-				optargs = append(optargs, new_optarg(opt, ""))
+				optargs = append(optargs, OptArg{opt, ""})
 			}
 		} else {
 			if len(arg) > 0 && arg[0] == '-' {
