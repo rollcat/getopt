@@ -72,7 +72,7 @@ func GetOpt(
 			}
 			break
 		} else if skip {
-			if arg[0] == '-' {
+			if len(arg) > 0 && arg[0] == '-' {
 				msg := fmt.Sprintf("expected an argument for %q got %v", emitopt, arg)
 				return nil, nil, errors.New(msg)
 			}
@@ -112,7 +112,7 @@ func GetOpt(
 				optargs = append(optargs, new_optarg(opt, ""))
 			}
 		} else {
-			if arg[0] == '-' {
+			if len(arg) > 0 && arg[0] == '-' {
 				msg := fmt.Sprintf("couldn't find '%v'", arg)
 				return nil, nil, errors.New(msg)
 			}
