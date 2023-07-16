@@ -27,20 +27,21 @@ GetOpt works like `getopt` in python's `getopt` module in the stdlib (modulus
 implementation bugs).
 
 params
-    args - the argv []string slice
-    shortopts - a string of options (similar to what GNU's getopt excepts).
-                Options which desire an argument should have a colon, ":",
-                subsequent to them. There are no optional arguments at this
-                time.
 
-                ex. "hvx:r" would accept -h -v -x asdf -r
+	args - the argv []string slice
+	shortopts - a string of options (similar to what GNU's getopt excepts).
+	            Options which desire an argument should have a colon, ":",
+	            subsequent to them. There are no optional arguments at this
+	            time.
 
-    longopts - a list of strings which describe the long options (eg those with
-               "--" in front). Placing an = on the end indicates a required
-               argument.
+	            ex. "hvx:r" would accept -h -v -x asdf -r
 
-               ex. []string{"help", "example="}
-                 would accept --help --example=tom
+	longopts - a list of strings which describe the long options (eg those with
+	           "--" in front). Placing an = on the end indicates a required
+	           argument.
+
+	           ex. []string{"help", "example="}
+	             would accept --help --example=tom
 */
 func GetOpt(
 	args []string,
