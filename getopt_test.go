@@ -3,6 +3,15 @@ package getopt
 import "testing"
 import "reflect"
 
+func errorQA(t *testing.T, err error) {
+	if eparse, ok := err.(*ParseError); ok {
+		if eparse.Message == "" {
+			t.Log(err)
+			t.Fatal("an error must have a message")
+		}
+	}
+}
+
 func Test_BuildShorts(t *testing.T) {
 	expected := map[string]bool{
 		"-h": false, "-v": false, "-e": false, "-x": true, "-y": true, "-z": true}
@@ -20,10 +29,12 @@ func Test_BuildShorts(t *testing.T) {
 func Test_doubleBuildShorts(t *testing.T) {
 	var err error
 	_, err = build_shorts("hvh:x:y:z:e")
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected an error...")
 	}
 	_, err = build_shorts("hvx:y:vz:e")
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected an error...")
 	}
@@ -100,11 +111,13 @@ func Test_doubleBuildLongs(t *testing.T) {
 	var err error
 	_, err = build_longs([]string{"help", "verbose", "empty", "example=",
 		"yacc=", "zebra=", "yacc="})
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected an error...")
 	}
 	_, err = build_longs([]string{"help", "verbose", "help=", "empty",
 		"example=", "yacc=", "zebra="})
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected an error...")
 	}
@@ -189,6 +202,7 @@ func Test_Long_arg_unexpected(t *testing.T) {
 		t.Fatal(err)
 	}
 	found, opt, arg, hasarg, err := long("--help=wat", longs)
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -530,6 +544,7 @@ func Test_Getopt_two_rshort_arg_bad_several_leftovers(t *testing.T) {
 	}
 	_, _, err := GetOpt(input, short, long)
 	t.Log(err)
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal(err)
 	}
@@ -581,6 +596,7 @@ func Test_Getopt_no_last_arg(t *testing.T) {
 		"-x",
 	}
 	_, _, err := GetOpt(input, short, long)
+	errorQA(t, err)
 	if err == nil {
 		t.Fatal("expected parse error got nil")
 	}
@@ -607,5 +623,36 @@ func Test_Getopt_empty_arg(t *testing.T) {
 	if len(optargs) != 0 {
 		t.Log(optargs)
 		t.Fatal("expected zero optargs")
+	}
+}
+
+func Test_Getopt_programmerErrorPanics(t *testing.T) {
+	defer func() {
+		err := recover()
+		if eparse, ok := err.(*ParseError); ok && eparse.notUsersFault {
+			t.Log("panicked as expected")
+			return
+		}
+		t.Log("GetOpt was expected to panic")
+		t.Fail()
+	}()
+	_, _, err := GetOpt([]string{}, "xx", nil)
+	if err != nil {
+		t.Log(err)
+		t.Log("GetOpt was expected to panic, but returned an error instead")
+		t.Fail()
+		return
+	}
+	t.Log("GetOpt was expected to panic")
+	t.Fail()
+}
+
+func Test_Getoptsafe_programmerErrorDoesNotPanic(t *testing.T) {
+	_, _, err := GetOptSafe([]string{}, "xx", nil)
+	errorQA(t, err)
+	if err == nil {
+		t.Log("expected an error")
+		t.Fail()
+		return
 	}
 }

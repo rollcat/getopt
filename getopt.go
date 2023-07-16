@@ -54,7 +54,6 @@
 
 package getopt
 
-import "errors"
 import "fmt"
 import "strings"
 
@@ -73,6 +72,37 @@ func (o OptArg) Opt() string { return o.Option }
 // backward compatibility with github.com/timtadh/getopt.
 func (o OptArg) Arg() string { return o.Argument }
 
+// ParseError contains hints about what exactly went wrong when
+// parsing the arguments in GetOpt. The resulting message
+// (ParseError.Error()) should be displayed to the user.
+type ParseError struct {
+	// message and opt are used to build the friendly user-facing
+	// error message.
+	Message string
+	Opt     string
+
+	// This can be somewhat useful in debugging.
+	Unexpected string
+	Expected   string
+
+	// The problem was caused by the programmer, not the user.
+	// This can trigger a panic.
+	notUsersFault bool
+}
+
+func (err ParseError) Error() string {
+	if err.Opt != "" {
+		return fmt.Sprintf("%s: %s", err.Message, err.Opt)
+	}
+	return err.Message
+}
+
+// Quote the value, e.g. to be presented as a literal in an error
+// message.
+func q(s string) string {
+	return fmt.Sprintf("%q", s)
+}
+
 // GetOpt parses the provided args, according to shortopts and
 // longopts; and returns the leftover args, parsed options with their
 // arguments, and (if there was one) any encountered parsing error.
@@ -80,7 +110,33 @@ func (o OptArg) Arg() string { return o.Argument }
 // See the package documentation for a description of the shortops and
 // longopts formats, as well as how the args are interpreted in their
 // context.
+//
+// If there is a programming error in shortopts or longopts (rather
+// than a parsing error resulting from unexpected arguments in the
+// resulting program), GetOpt may cause a runtime panic.
 func GetOpt(
+	args []string,
+	shortopts string,
+	longopts []string,
+) (
+	leftovers []string,
+	optargs []OptArg,
+	err error,
+) {
+	leftovers, optargs, err = GetOptSafe(args, shortopts, longopts)
+	if eparse, ok := err.(*ParseError); ok && eparse.notUsersFault {
+		panic(err)
+	}
+	return
+}
+
+// GetOptSafe works identically to GetOpt, but will not trigger
+// runtime panics on errors such as programmer mistakes in shortopts
+// or longopts. This is for situations, where you'd like to implement
+// getopt(1), or otherwise allow the end user to specify their own
+// shortops/longopts, and get a useful error message rather than a
+// stack trace.
+func GetOptSafe(
 	args []string,
 	shortopts string,
 	longopts []string,
@@ -104,14 +160,20 @@ func GetOpt(
 		leftovers = leftovers[1:]
 		if arg == "--" {
 			if skip {
-				err := fmt.Errorf("expected an argument for %q got --", emitopt)
-				return nil, nil, err
+				return nil, nil, &ParseError{
+					Message:    "option requires an argument",
+					Opt:        emitopt,
+					Unexpected: q("--"),
+				}
 			}
 			break
 		} else if skip {
 			if len(arg) > 0 && arg[0] == '-' {
-				msg := fmt.Sprintf("expected an argument for %q got %v", emitopt, arg)
-				return nil, nil, errors.New(msg)
+				return nil, nil, &ParseError{
+					Message:    "option requires an argument",
+					Opt:        emitopt,
+					Unexpected: fmt.Sprintf("next option: %q", arg),
+				}
 			}
 			optargs = append(optargs, OptArg{emitopt, arg})
 			skip = false
@@ -124,8 +186,10 @@ func GetOpt(
 				sa := "-" + string(sharg)
 				if found, opt, hasarg := short(sa, shorts); found {
 					if i != len(shargs)-1 && hasarg {
-						msg := fmt.Sprintf("'%v' requires an arg", sa)
-						return nil, nil, errors.New(msg)
+						return nil, nil, &ParseError{
+							Message: "option requires an argument",
+							Opt:     sa,
+						}
 					} else if hasarg {
 						skip = true
 						emitopt = opt
@@ -133,8 +197,12 @@ func GetOpt(
 						optargs = append(optargs, OptArg{opt, ""})
 					}
 				} else {
-					msg := fmt.Sprintf("couldn't find '%v'", sa)
-					return nil, nil, errors.New(msg)
+					return nil, nil, &ParseError{
+						Message:    "option not recognized",
+						Opt:        sa,
+						Unexpected: q(sa),
+						Expected:   "a short option",
+					}
 				}
 			}
 		} else if found, opt, oarg, hasarg, err := long(arg, longs); found {
@@ -150,15 +218,24 @@ func GetOpt(
 			}
 		} else {
 			if len(arg) > 0 && arg[0] == '-' {
-				msg := fmt.Sprintf("couldn't find '%v'", arg)
-				return nil, nil, errors.New(msg)
+				return nil, nil, &ParseError{
+					Message:    "option not recognized",
+					Opt:        arg,
+					Unexpected: q(arg),
+					Expected:   "a short or a long option",
+				}
 			}
 			leftovers = args[i:]
 			break
 		}
 	}
 	if skip {
-		return nil, nil, fmt.Errorf("expected an argument for %q got end of args", emitopt)
+		return nil, nil, &ParseError{
+			Message:    "option requires an argument",
+			Opt:        emitopt,
+			Unexpected: "end of arguments",
+			Expected:   "an argument for an option",
+		}
 	}
 
 	return leftovers, optargs, nil
@@ -174,9 +251,11 @@ func build_longs(long []string) (map[string]bool, error) {
 		}
 		opt = "--" + opt
 		if _, has := longs[opt]; has {
-			msg := fmt.Sprintf(
-				"Option %v entered more than one in longs", opt)
-			return nil, errors.New(msg)
+			return nil, &ParseError{
+				Message:       "option specified more than once",
+				Unexpected:    q(opt),
+				notUsersFault: true,
+			}
 		} else {
 			longs[opt] = hasarg
 		}
@@ -192,9 +271,11 @@ func build_shorts(short string) (map[string]bool, error) {
 			continue
 		}
 		if _, has := shorts["-"+c]; has {
-			msg := fmt.Sprintf(
-				"Option %v entered more than one in shorts", c)
-			return nil, errors.New(msg)
+			return nil, &ParseError{
+				Message:       "option specified more than once",
+				Unexpected:    q(c),
+				notUsersFault: true,
+			}
 		} else {
 			shorts["-"+c] = false
 			if i+1 < len(short) {
@@ -230,9 +311,12 @@ func long(arg string, longs map[string]bool) (
 	}
 	if hasarg, has := longs[opt]; has {
 		if !hasarg && rarg != "" {
-			msg := fmt.Sprintf(
-				"Option %v received an arg, %v, and did not expect one", opt, rarg)
-			return false, "", "", false, errors.New(msg)
+			err = &ParseError{
+				Message:    "option does not take an argument",
+				Opt:        opt,
+				Unexpected: q(rarg),
+			}
+			return false, "", "", false, err
 		}
 		return true, opt, rarg, hasarg, nil
 	}
