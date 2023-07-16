@@ -1,7 +1,7 @@
 Yet Another GetOpt Library For Go
 =================================
 
-By Tim Henderson (tim.tadh@gmail.com)
+Originally by Tim Henderson (tim.tadh@gmail.com)
 
 BSD Licenced
 
@@ -41,7 +41,7 @@ Docs
     PACKAGE
 
     package getopt
-        import "github.com/timtadh/getopt"
+        import "github.com/rollcat/getopt"
 
 
     FUNCTIONS
